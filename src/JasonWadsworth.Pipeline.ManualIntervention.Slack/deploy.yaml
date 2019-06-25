@@ -1,0 +1,57 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Pipeline ManualIntervention Slack Lambda
+Parameters:
+    BucketName:
+        Type: String
+    ObjectKey:
+        Type: String
+    WebhookUrl:
+        Type: String
+        Description: The webhook URL for posting messages to Slack
+    SnsArn:
+        Type: String
+        Description: The ARN of the SNS topic to get events from
+Resources:
+    HandlerFunction:
+        Type: 'AWS::Lambda::Function'
+        Properties:
+            Description: Lambda function to handle CodePipeline Manual Intervention SNS messages for Slack
+            FunctionName: Pipeline-ManualIntervention-Slack
+            Code:
+                S3Bucket: !Ref BucketName
+                S3Key: !Ref ObjectKey
+            Handler: 'JasonWadsworth.Pipeline.ManualIntervention.Slack::JasonWadsworth.Pipeline.ManualIntervention.Slack.Function::FunctionHandler'
+            Runtime: dotnetcore2.1
+            MemorySize: 128
+            Timeout: 15
+            Role: !GetAtt HandlerRole.Arn
+            Environment:
+                Variables:
+                    Pipeline__ManualIntervention__Slack__WebhookUrl: !Ref WebhookUrl
+    SnsSubscription:
+        Type: 'AWS::SNS::Subscription'
+        Properties:
+            Endpoint: !GetAtt HandlerFunction.Arn
+            Protocol: lambda
+            TopicArn: !Ref SnsArn
+    HandlerRole:
+        Type: 'AWS::IAM::Role'
+        Properties:
+            RoleName: !Sub 'Pipeline-ManualIntervention-Slack-${AWS::Region}'
+            AssumeRolePolicyDocument:
+                Version: '2012-10-17'
+                Statement:
+                    - Effect: Allow
+                      Principal:
+                          Service: lambda.amazonaws.com
+                      Action:
+                          - 'sts:AssumeRole'
+            ManagedPolicyArns:
+                - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+    LambdaPermissions:
+        Type: 'AWS::Lambda::Permission'
+        Properties:
+            Action: 'lambda:InvokeFunction'
+            FunctionName: !Ref HandlerFunction
+            Principal: sns.amazonaws.com
+            SourceArn: !Ref SnsArn
